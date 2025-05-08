@@ -1,5 +1,6 @@
 import { browser } from '$app/environment';
 import * as jose from 'jose';
+import { Agent, AtpAgent } from '@atproto/api';
 
 // Types for our auth state
 interface AuthSession {
@@ -396,128 +397,53 @@ export async function handleOAuthCallback(queryParams: URLSearchParams): Promise
     }
 }
 
-// Get three random accounts the user follows
+// Get three random accounts the user follows using the official API client
 export async function getRandomFollowedAccounts(count = 3): Promise<any[]> {
     if (!browser || !authSession.isAuthenticated || !authSession.accessToken) {
         throw new Error('Not authenticated');
     }
 
     try {
-        // Need to regenerate a DPoP keypair since it can't be stored directly
-        const dpopKeypair = await generateDpopKeypair();
-        authSession.dpopKey = dpopKeypair;
-
         const serverUrl = localStorage.getItem('bsky:serverUrl') || 'https://bsky.social';
-        const apiUrl = `${serverUrl}/xrpc/app.bsky.graph.getFollows`;
-        const endpoint = new URL(apiUrl);
-        endpoint.searchParams.append('actor', authSession.sub || '');
-        endpoint.searchParams.append('limit', '100'); // Get a larger set to select random ones from
 
-        // First, we may need to get a nonce for the API request
-        let apiNonce = authSession.serverNonce;
+        // Create a session object that can be used by the Agent
+        const session = {
+            accessJwt: authSession.accessToken,
+            refreshJwt: authSession.refreshToken || '',
+            did: authSession.sub || '',
+            handle: '', // This will be populated by the API
 
-        if (!apiNonce) {
-            try {
-                const initialResponse = await fetch(endpoint.toString(), {
-                    method: 'GET',
-                    headers: {
-                        'Authorization': `DPoP ${authSession.accessToken}`
-                    }
-                });
+            // Agent requires these methods
+            fetch: async (url: string, init?: RequestInit) => {
+                return fetch(url, init);
+            },
 
-                apiNonce = initialResponse.headers.get('DPoP-Nonce');
-                if (apiNonce) {
-                    authSession.serverNonce = apiNonce;
-                    console.log('Got API nonce:', apiNonce);
-                }
-            } catch (e) {
-                console.error('Error getting API nonce:', e);
+            refreshSession: async () => {
+                // This would normally refresh the session, but for this simple example
+                // we'll just return the current session
+                return session;
+            },
+
+            signOut: async () => {
+                // Clean up session data
+                logout();
             }
-        }
+        };
 
-        // Create DPoP JWT for the API request
-        const dpopJwt = await createDpopJwt(
-            dpopKeypair,
-            'GET',
-            endpoint.toString(),
-            apiNonce,
-            authSession.accessToken
-        );
+        // Create an Agent instance with our session
+        const agent = new Agent(session);
 
-        // Make the API request
-        const response = await fetch(endpoint.toString(), {
-            method: 'GET',
-            headers: {
-                'Authorization': `DPoP ${authSession.accessToken}`,
-                'DPoP': dpopJwt
-            }
+        // Get the follows using the agent
+        const response = await agent.getFollows({
+            actor: authSession.sub || '',
+            limit: 100
         });
 
-        // Check for new nonce and save it
-        const newNonce = response.headers.get('DPoP-Nonce');
-        if (newNonce) {
-            authSession.serverNonce = newNonce;
+        if (!response.success) {
+            throw new Error('Failed to get follows data');
         }
 
-        // If we get a nonce error, retry with the new nonce
-        if (response.status === 401) {
-            const error = await response.json().catch(() => ({}));
-            console.error('API request error:', error);
-
-            if (error.error === 'use_dpop_nonce' && newNonce) {
-                const retryDpopJwt = await createDpopJwt(
-                    dpopKeypair,
-                    'GET',
-                    endpoint.toString(),
-                    newNonce,
-                    authSession.accessToken
-                );
-
-                const retryResponse = await fetch(endpoint.toString(), {
-                    method: 'GET',
-                    headers: {
-                        'Authorization': `DPoP ${authSession.accessToken}`,
-                        'DPoP': retryDpopJwt
-                    }
-                });
-
-                if (retryResponse.ok) {
-                    const data = await retryResponse.json();
-                    const follows = data.follows || [];
-
-                    // Randomly select accounts
-                    if (follows.length <= count) {
-                        return follows;
-                    }
-
-                    const randomFollows = [];
-                    const followsCopy = [...follows];
-                    for (let i = 0; i < count && followsCopy.length > 0; i++) {
-                        const randomIndex = Math.floor(Math.random() * followsCopy.length);
-                        randomFollows.push(followsCopy[randomIndex]);
-                        followsCopy.splice(randomIndex, 1);
-                    }
-
-                    return randomFollows.map(follow => ({
-                        did: follow.did,
-                        handle: follow.handle,
-                        displayName: follow.displayName,
-                        avatar: follow.avatar
-                    }));
-                } else {
-                    throw new Error(`API retry request failed: ${retryResponse.statusText}`);
-                }
-            }
-
-            throw new Error(`API request failed: ${response.statusText}`);
-        }
-
-        if (!response.ok) {
-            throw new Error(`API request failed: ${response.statusText}`);
-        }
-
-        const data = await response.json();
-        const follows = data.follows || [];
+        const follows = response.data.follows || [];
 
         // Randomly select the requested number of accounts
         const randomFollows = [];
