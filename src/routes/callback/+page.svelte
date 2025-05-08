@@ -4,6 +4,7 @@
   import { handleOAuthCallback } from '$lib/bskyAuth';
 
   let error = '';
+  let errorDescription = '';
   let isProcessing = true;
 
   onMount(async () => {
@@ -14,6 +15,17 @@
       // Check for error response from the auth server
       if (queryParams.has('error')) {
         error = queryParams.get('error') || 'Unknown error';
+        errorDescription = queryParams.get('error_description') || '';
+        
+        // URL decode the error description if it exists
+        if (errorDescription) {
+          try {
+            errorDescription = decodeURIComponent(errorDescription);
+          } catch (e) {
+            console.error('Failed to decode error description', e);
+          }
+        }
+        
         isProcessing = false;
         return;
       }
@@ -41,7 +53,10 @@
     {:else if error}
       <div class="error">
         <h2>Authentication Error</h2>
-        <p>{error}</p>
+        <p class="error-type"><strong>Error:</strong> {error}</p>
+        {#if errorDescription}
+          <p class="error-description"><strong>Details:</strong> {errorDescription}</p>
+        {/if}
         <button on:click={() => goto('/')}>Return to Home</button>
       </div>
     {/if}
@@ -86,6 +101,20 @@
     color: #721c24;
     background-color: #f8d7da;
     border: 1px solid #f5c6cb;
+  }
+
+  .error-type {
+    margin-bottom: 0.5rem;
+  }
+  
+  .error-description {
+    font-size: 0.9rem;
+    background-color: #f8eaea;
+    padding: 0.75rem;
+    border-radius: 4px;
+    max-width: 100%;
+    overflow-wrap: break-word;
+    white-space: normal;
   }
 
   button {
