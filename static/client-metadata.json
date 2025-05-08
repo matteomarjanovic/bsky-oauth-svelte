@@ -3,8 +3,7 @@
     "client_uri": "https://bsky-oauth-svelte.netlify.app",
     "logo_uri": "https://bsky-oauth-svelte.netlify.app/favicon.png",
     "redirect_uris": [
-        "http://localhost:5173/callback",
-        "https://https://bsky-oauth-svelte.netlify.app/callback"
+        "https:/bsky-oauth-svelte.netlify.app/callback"
     ],
     "token_endpoint_auth_method": "none",
     "grant_types": [
