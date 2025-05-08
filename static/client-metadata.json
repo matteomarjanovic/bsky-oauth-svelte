@@ -1,4 +1,5 @@
 {
+    "client_id": "https://bsky-oauth-svelte.netlify.app/client-metadata.json",
     "client_name": "My Awesome Bluesky Svelte App",
     "client_uri": "https://bsky-oauth-svelte.netlify.app",
     "logo_uri": "https://bsky-oauth-svelte.netlify.app/favicon.png",
