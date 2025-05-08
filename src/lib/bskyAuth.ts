@@ -215,15 +215,34 @@ export async function handleOAuthCallback(queryParams: URLSearchParams): Promise
         // 5. Generate a new DPoP keypair
         const dpopKeypair = await generateDpopKeypair();
 
-        // 6. Create a DPoP JWT for the token request
-        // In a complete implementation, we would handle the DPoP nonce properly
+        // 6. First, make a request to get a DPoP nonce
+        // This is a crucial step we were missing before
+        let dpopNonce = '';
+        try {
+            const initialRequest = await fetch(`${serverUrl}/oauth/token`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                body: 'invalid=invalid' // Dummy body to trigger a response
+            });
+
+            // Extract the DPoP-Nonce header
+            dpopNonce = initialRequest.headers.get('DPoP-Nonce') || '';
+            console.log('Got DPoP nonce:', dpopNonce);
+        } catch (error) {
+            console.error('Failed to get DPoP nonce:', error);
+        }
+
+        // 7. Create a DPoP JWT for the token request with the nonce
         const dpopJwt = await createDpopJwt(
             dpopKeypair,
             'POST',
-            `${serverUrl}/oauth/token`
+            `${serverUrl}/oauth/token`,
+            dpopNonce
         );
 
-        // 7. Exchange the code for tokens
+        // 8. Exchange the code for tokens
         const tokenResponse = await fetch(`${serverUrl}/oauth/token`, {
             method: 'POST',
             headers: {
@@ -239,15 +258,25 @@ export async function handleOAuthCallback(queryParams: URLSearchParams): Promise
             })
         });
 
+        // Log response for debugging
+        console.log('Token response status:', tokenResponse.status);
+
         if (!tokenResponse.ok) {
-            const errorData = await tokenResponse.json();
-            throw new Error(`Token request failed: ${errorData.error}`);
+            let errorMsg = 'Token request failed';
+            try {
+                const errorData = await tokenResponse.json();
+                errorMsg += `: ${errorData.error}`;
+                console.error('Token error details:', errorData);
+            } catch (e) {
+                console.error('Failed to parse error response', e);
+            }
+            throw new Error(errorMsg);
         }
 
-        // 8. Parse the token response
+        // 9. Parse the token response
         const tokenData = await tokenResponse.json();
 
-        // 9. Update and return the auth session
+        // 10. Update and return the auth session
         authSession.isAuthenticated = true;
         authSession.accessToken = tokenData.access_token;
         authSession.refreshToken = tokenData.refresh_token;
