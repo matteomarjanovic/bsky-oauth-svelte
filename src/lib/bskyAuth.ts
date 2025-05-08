@@ -85,8 +85,16 @@ export async function createDpopJwt(
     try {
         // Extract the public key to JWK format
         const publicKeyJwk = await crypto.subtle.exportKey('jwk', keypair.publicKey);
+        
+        // Make sure to remove unnecessary properties that might cause validation issues
+        delete publicKeyJwk.key_ops;
+        delete publicKeyJwk.ext;
+        
+        // Make sure required properties are set for ES256
+        if (!publicKeyJwk.crv) publicKeyJwk.crv = 'P-256';
+        if (!publicKeyJwk.kty) publicKeyJwk.kty = 'EC';
 
-        // Create header
+        // Create header - make sure typ and alg are exactly as specified
         const header = {
             typ: 'dpop+jwt',
             alg: 'ES256',
@@ -125,17 +133,25 @@ export async function createDpopJwt(
         // Sign the token
         const encoder = new TextEncoder();
         const data = encoder.encode(signatureInput);
+        
+        // For ES256, make sure we're using the correct algorithm parameters
         const signature = await crypto.subtle.sign(
-            { name: 'ECDSA', hash: { name: 'SHA-256' } },
+            { 
+                name: 'ECDSA', 
+                hash: { name: 'SHA-256' } 
+            },
             keypair.privateKey,
             data
         );
 
-        // Encode the signature
+        // For ECDSA signatures in JWT, we need special encoding
+        // Convert the raw signature to the JWT format
         const encodedSignature = base64UrlEncode(signature);
 
         // Combine to form the complete JWT
-        return `${signatureInput}.${encodedSignature}`;
+        const jwt = `${signatureInput}.${encodedSignature}`;
+        
+        return jwt;
     } catch (error) {
         console.error('Error creating DPoP JWT:', error);
         throw error;
