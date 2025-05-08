@@ -166,7 +166,10 @@ export async function startOAuthFlow(serverUrl: string = 'https://bsky.social'):
         authUrl.searchParams.append('client_id', clientId);
         authUrl.searchParams.append('response_type', 'code');
         authUrl.searchParams.append('redirect_uri', redirectUri);
-        authUrl.searchParams.append('scope', 'atproto');
+
+        // Update the scope to include access to graph data
+        authUrl.searchParams.append('scope', 'com.atproto.sync app.bsky app.bsky.graph');
+
         authUrl.searchParams.append('state', state);
         authUrl.searchParams.append('code_challenge', codeChallenge);
         authUrl.searchParams.append('code_challenge_method', 'S256');
