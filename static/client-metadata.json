@@ -16,5 +16,6 @@
     "scope": "atproto",
     "contacts": [
         "info@matteomarjanovic.com"
-    ]
+    ],
+    "dpop_bound_access_tokens": true
 }
