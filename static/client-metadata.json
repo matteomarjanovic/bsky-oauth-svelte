@@ -1,0 +1,21 @@
+{
+    "client_name": "My Awesome Bluesky Svelte App",
+    "client_uri": "https://bsky-oauth-svelte.netlify.app",
+    "logo_uri": "https://bsky-oauth-svelte.netlify.app/favicon.png",
+    "redirect_uris": [
+        "http://localhost:5173/callback",
+        "https://https://bsky-oauth-svelte.netlify.app/callback"
+    ],
+    "token_endpoint_auth_method": "none",
+    "grant_types": [
+        "authorization_code",
+        "refresh_token"
+    ],
+    "response_types": [
+        "code"
+    ],
+    "scope": "atproto",
+    "contacts": [
+        "mailto:info@matteomarjanovic.com"
+    ]
+}
