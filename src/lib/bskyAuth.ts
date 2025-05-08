@@ -1,4 +1,5 @@
 import { browser } from '$app/environment';
+import * as jose from 'jose';
 
 // Types for our auth state
 interface AuthSession {
@@ -72,7 +73,7 @@ export async function generateDpopKeypair(): Promise<CryptoKeyPair> {
     );
 }
 
-// Create a DPoP JWT for token requests
+// Create a DPoP JWT for token requests using the jose library
 export async function createDpopJwt(
     keypair: CryptoKeyPair,
     method: string,
@@ -83,26 +84,10 @@ export async function createDpopJwt(
     if (!browser) return '';
 
     try {
-        // Extract the public key to JWK format
+        // Extract the public key to JWK format for inclusion in the header
         const publicKeyJwk = await crypto.subtle.exportKey('jwk', keypair.publicKey);
-
-        // Clean up the JWK to include only what's needed
-        // These are the required fields for an EC public key in JWK format
-        const cleanJwk = {
-            kty: 'EC',
-            crv: 'P-256',
-            x: publicKeyJwk.x,
-            y: publicKeyJwk.y
-        };
-
-        // Create header - make sure typ and alg are exactly as specified
-        const header = {
-            typ: 'dpop+jwt',
-            alg: 'ES256',
-            jwk: cleanJwk
-        };
-
-        // Create payload
+        
+        // Create the payload
         const payload: any = {
             jti: crypto.randomUUID(),
             htm: method,
@@ -124,42 +109,29 @@ export async function createDpopJwt(
             payload.ath = base64UrlEncode(hash);
         }
 
-        // Encode header and payload
-        const encodedHeader = base64UrlEncode(JSON.stringify(header));
-        const encodedPayload = base64UrlEncode(JSON.stringify(payload));
-
-        // Create the signature input
-        const signatureInput = `${encodedHeader}.${encodedPayload}`;
-
-        // Sign the token
-        const encoder = new TextEncoder();
-        const data = encoder.encode(signatureInput);
-
-        // For ES256, we need to carefully handle the signature
-        const rawSignature = await crypto.subtle.sign(
-            {
-                name: 'ECDSA',
-                hash: { name: 'SHA-256' }
-            },
-            keypair.privateKey,
-            data
+        // Use jose to create a properly formatted JWT
+        // Note that we need to convert our WebCrypto keypair to a format jose can use
+        const privateKey = await jose.importJWK(
+            await crypto.subtle.exportKey('jwk', keypair.privateKey),
+            'ES256'
         );
 
-        // The ECDSA signature from WebCrypto is in IEEE P1363 format
-        // We need to convert it to the DER format expected by JWT
-        // For simplicity, we'll just use base64 encoding and handle it on the server side
-        const encodedSignature = base64UrlEncode(rawSignature);
+        // Create a signed JWT with the jose library
+        const dpopJwt = await new jose.SignJWT(payload)
+            .setProtectedHeader({ 
+                alg: 'ES256', 
+                typ: 'dpop+jwt',
+                jwk: {
+                    kty: publicKeyJwk.kty,
+                    crv: publicKeyJwk.crv,
+                    x: publicKeyJwk.x,
+                    y: publicKeyJwk.y
+                }
+            })
+            .sign(privateKey);
 
-        // Combine to form the complete JWT
-        const jwt = `${signatureInput}.${encodedSignature}`;
-
-        console.log('Created DPoP JWT:', {
-            header: JSON.stringify(header),
-            payload: JSON.stringify(payload),
-            signatureLength: encodedSignature.length
-        });
-
-        return jwt;
+        console.log('Created DPoP JWT with jose library');
+        return dpopJwt;
     } catch (error) {
         console.error('Error creating DPoP JWT:', error);
         throw error;
