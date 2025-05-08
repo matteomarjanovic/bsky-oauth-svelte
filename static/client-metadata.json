@@ -14,7 +14,7 @@
     "response_types": [
         "code"
     ],
-    "scope": "atproto",
+    "scope": "atproto transition:generic",
     "contacts": [
         "info@matteomarjanovic.com"
     ],
