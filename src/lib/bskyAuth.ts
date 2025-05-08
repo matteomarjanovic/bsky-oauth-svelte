@@ -234,7 +234,7 @@ export async function handleOAuthCallback(queryParams: URLSearchParams): Promise
                 grant_type: 'authorization_code',
                 code,
                 redirect_uri: `${window.location.origin}/callback`,
-                client_id: 'https://your-app-url.com/client-metadata.json',
+                client_id: 'https://bsky-oauth-svelte.netlify.app/client-metadata.json',
                 code_verifier: codeVerifier
             })
         });
