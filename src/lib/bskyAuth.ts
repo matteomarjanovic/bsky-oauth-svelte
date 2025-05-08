@@ -406,32 +406,14 @@ export async function getRandomFollowedAccounts(count = 3): Promise<any[]> {
     try {
         const serverUrl = localStorage.getItem('bsky:serverUrl') || 'https://bsky.social';
 
-        // Create a session object that can be used by the Agent
-        const session = {
-            accessJwt: authSession.accessToken,
-            refreshJwt: authSession.refreshToken || '',
-            did: authSession.sub || '',
-            handle: '', // This will be populated by the API
-
-            // Agent requires these methods
-            fetch: async (url: string, init?: RequestInit) => {
-                return fetch(url, init);
-            },
-
-            refreshSession: async () => {
-                // This would normally refresh the session, but for this simple example
-                // we'll just return the current session
-                return session;
-            },
-
-            signOut: async () => {
-                // Clean up session data
-                logout();
+        // Create an Agent instance with the OAuth session
+        const agent = new Agent({
+            service: serverUrl,
+            // Configuration to use our access token with every request
+            headers: {
+                Authorization: `Bearer ${authSession.accessToken}`
             }
-        };
-
-        // Create an Agent instance with our session
-        const agent = new Agent(session);
+        });
 
         // Get the follows using the agent
         const response = await agent.getFollows({
