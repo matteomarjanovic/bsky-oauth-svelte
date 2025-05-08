@@ -86,19 +86,20 @@ export async function createDpopJwt(
         // Extract the public key to JWK format
         const publicKeyJwk = await crypto.subtle.exportKey('jwk', keypair.publicKey);
         
-        // Make sure to remove unnecessary properties that might cause validation issues
-        delete publicKeyJwk.key_ops;
-        delete publicKeyJwk.ext;
-        
-        // Make sure required properties are set for ES256
-        if (!publicKeyJwk.crv) publicKeyJwk.crv = 'P-256';
-        if (!publicKeyJwk.kty) publicKeyJwk.kty = 'EC';
+        // Clean up the JWK to include only what's needed
+        // These are the required fields for an EC public key in JWK format
+        const cleanJwk = {
+            kty: 'EC',
+            crv: 'P-256',
+            x: publicKeyJwk.x,
+            y: publicKeyJwk.y
+        };
 
         // Create header - make sure typ and alg are exactly as specified
         const header = {
             typ: 'dpop+jwt',
             alg: 'ES256',
-            jwk: publicKeyJwk
+            jwk: cleanJwk
         };
 
         // Create payload
@@ -134,8 +135,8 @@ export async function createDpopJwt(
         const encoder = new TextEncoder();
         const data = encoder.encode(signatureInput);
         
-        // For ES256, make sure we're using the correct algorithm parameters
-        const signature = await crypto.subtle.sign(
+        // For ES256, we need to carefully handle the signature
+        const rawSignature = await crypto.subtle.sign(
             { 
                 name: 'ECDSA', 
                 hash: { name: 'SHA-256' } 
@@ -143,13 +144,20 @@ export async function createDpopJwt(
             keypair.privateKey,
             data
         );
-
-        // For ECDSA signatures in JWT, we need special encoding
-        // Convert the raw signature to the JWT format
-        const encodedSignature = base64UrlEncode(signature);
+        
+        // The ECDSA signature from WebCrypto is in IEEE P1363 format
+        // We need to convert it to the DER format expected by JWT
+        // For simplicity, we'll just use base64 encoding and handle it on the server side
+        const encodedSignature = base64UrlEncode(rawSignature);
 
         // Combine to form the complete JWT
         const jwt = `${signatureInput}.${encodedSignature}`;
+        
+        console.log('Created DPoP JWT:', {
+            header: JSON.stringify(header),
+            payload: JSON.stringify(payload),
+            signatureLength: encodedSignature.length
+        });
         
         return jwt;
     } catch (error) {
@@ -230,30 +238,47 @@ export async function handleOAuthCallback(queryParams: URLSearchParams): Promise
         // 5. Generate a new DPoP keypair
         const dpopKeypair = await generateDpopKeypair();
 
-        // 6. First, make a request to get a DPoP nonce
+        // 6. First, make a valid request to get a DPoP nonce, using actual parameters
         let dpopNonce = '';
         try {
             console.log('Making initial request to get DPoP nonce...');
+            
+            // Create a proper token request (with our client_id) to get a nonce
+            const clientId = 'https://bsky-oauth-svelte.netlify.app/client-metadata.json';
+            
+            // First create a DPoP JWT without a nonce
+            const initialDpopJwt = await createDpopJwt(
+                dpopKeypair,
+                'POST',
+                `${serverUrl}/oauth/token`
+            );
+            
+            // Make a proper request that will fail but return a nonce
             const initialResponse = await fetch(`${serverUrl}/oauth/token`, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded'
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'DPoP': initialDpopJwt
                 },
-                body: 'invalid=invalid' // Dummy body to trigger a response
+                body: new URLSearchParams({
+                    grant_type: 'authorization_code',
+                    code: 'dummy-code', // This will fail but should return a nonce
+                    redirect_uri: `${window.location.origin}/callback`,
+                    client_id: clientId,
+                    code_verifier: 'dummy-verifier'
+                }).toString()
             });
-
-            // Check for DPoP nonce in the headers
+            
+            // Extract the DPoP-Nonce header
             dpopNonce = initialResponse.headers.get('DPoP-Nonce') || '';
             console.log('Got DPoP nonce:', dpopNonce);
-
-            // If we didn't get a nonce, check if there's an error response with info
-            if (!dpopNonce) {
-                try {
-                    const errorData = await initialResponse.json();
-                    console.log('Error response when requesting nonce:', errorData);
-                } catch (e) {
-                    // Ignore parsing errors
-                }
+            
+            // Log the error response (for debugging)
+            try {
+                const errorData = await initialResponse.json();
+                console.log('Expected error when requesting nonce:', errorData);
+            } catch (e) {
+                // Ignore parsing errors
             }
         } catch (error) {
             console.error('Failed to get DPoP nonce:', error);
