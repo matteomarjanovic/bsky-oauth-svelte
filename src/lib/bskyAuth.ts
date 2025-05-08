@@ -85,7 +85,7 @@ export async function createDpopJwt(
     try {
         // Extract the public key to JWK format
         const publicKeyJwk = await crypto.subtle.exportKey('jwk', keypair.publicKey);
-        
+
         // Clean up the JWK to include only what's needed
         // These are the required fields for an EC public key in JWK format
         const cleanJwk = {
@@ -134,17 +134,17 @@ export async function createDpopJwt(
         // Sign the token
         const encoder = new TextEncoder();
         const data = encoder.encode(signatureInput);
-        
+
         // For ES256, we need to carefully handle the signature
         const rawSignature = await crypto.subtle.sign(
-            { 
-                name: 'ECDSA', 
-                hash: { name: 'SHA-256' } 
+            {
+                name: 'ECDSA',
+                hash: { name: 'SHA-256' }
             },
             keypair.privateKey,
             data
         );
-        
+
         // The ECDSA signature from WebCrypto is in IEEE P1363 format
         // We need to convert it to the DER format expected by JWT
         // For simplicity, we'll just use base64 encoding and handle it on the server side
@@ -152,13 +152,13 @@ export async function createDpopJwt(
 
         // Combine to form the complete JWT
         const jwt = `${signatureInput}.${encodedSignature}`;
-        
+
         console.log('Created DPoP JWT:', {
             header: JSON.stringify(header),
             payload: JSON.stringify(payload),
             signatureLength: encodedSignature.length
         });
-        
+
         return jwt;
     } catch (error) {
         console.error('Error creating DPoP JWT:', error);
@@ -242,17 +242,20 @@ export async function handleOAuthCallback(queryParams: URLSearchParams): Promise
         let dpopNonce = '';
         try {
             console.log('Making initial request to get DPoP nonce...');
-            
+
             // Create a proper token request (with our client_id) to get a nonce
             const clientId = 'https://bsky-oauth-svelte.netlify.app/client-metadata.json';
-            
+
             // First create a DPoP JWT without a nonce
             const initialDpopJwt = await createDpopJwt(
                 dpopKeypair,
                 'POST',
                 `${serverUrl}/oauth/token`
             );
-            
+
+            // Generate a dummy code verifier of appropriate length (at least 43 chars)
+            const dummyCodeVerifier = generateCodeVerifier(64);
+
             // Make a proper request that will fail but return a nonce
             const initialResponse = await fetch(`${serverUrl}/oauth/token`, {
                 method: 'POST',
@@ -265,14 +268,14 @@ export async function handleOAuthCallback(queryParams: URLSearchParams): Promise
                     code: 'dummy-code', // This will fail but should return a nonce
                     redirect_uri: `${window.location.origin}/callback`,
                     client_id: clientId,
-                    code_verifier: 'dummy-verifier'
+                    code_verifier: dummyCodeVerifier // Using a properly formatted code verifier
                 }).toString()
             });
-            
+
             // Extract the DPoP-Nonce header
             dpopNonce = initialResponse.headers.get('DPoP-Nonce') || '';
             console.log('Got DPoP nonce:', dpopNonce);
-            
+
             // Log the error response (for debugging)
             try {
                 const errorData = await initialResponse.json();
