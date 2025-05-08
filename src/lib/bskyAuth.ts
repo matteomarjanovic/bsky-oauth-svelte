@@ -68,7 +68,7 @@ export async function generateDpopKeypair(): Promise<CryptoKeyPair> {
             name: 'ECDSA',
             namedCurve: 'P-256' // ES256 required by Bluesky
         },
-        false, // not extractable
+        true, // Make keys extractable so we can export them for jose
         ['sign', 'verify'] // can be used for signing and verification
     );
 }
@@ -86,7 +86,7 @@ export async function createDpopJwt(
     try {
         // Extract the public key to JWK format for inclusion in the header
         const publicKeyJwk = await crypto.subtle.exportKey('jwk', keypair.publicKey);
-        
+
         // Create the payload
         const payload: any = {
             jti: crypto.randomUUID(),
@@ -118,8 +118,8 @@ export async function createDpopJwt(
 
         // Create a signed JWT with the jose library
         const dpopJwt = await new jose.SignJWT(payload)
-            .setProtectedHeader({ 
-                alg: 'ES256', 
+            .setProtectedHeader({
+                alg: 'ES256',
                 typ: 'dpop+jwt',
                 jwk: {
                     kty: publicKeyJwk.kty,
