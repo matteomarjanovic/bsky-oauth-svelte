@@ -1,0 +1,23 @@
+{
+    "client_id": "https://514b-2001-999-594-bfc9-cd41-fff8-a868-c7a5.ngrok-free.app/client-metadata-dev.json",
+    "client_name": "My Awesome Bluesky Svelte App",
+    "client_uri": "https://514b-2001-999-594-bfc9-cd41-fff8-a868-c7a5.ngrok-free.app",
+    "logo_uri": "https://514b-2001-999-594-bfc9-cd41-fff8-a868-c7a5.ngrok-free.app/favicon.png",
+    "redirect_uris": [
+        "localhost:5173/callback",
+        "https://514b-2001-999-594-bfc9-cd41-fff8-a868-c7a5.ngrok-free.app/callback"
+    ],
+    "token_endpoint_auth_method": "none",
+    "grant_types": [
+        "authorization_code",
+        "refresh_token"
+    ],
+    "response_types": [
+        "code"
+    ],
+    "scope": "atproto transition:generic",
+    "contacts": [
+        "info@matteomarjanovic.com"
+    ],
+    "dpop_bound_access_tokens": true
+}

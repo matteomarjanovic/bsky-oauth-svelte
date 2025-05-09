@@ -1,6 +1,7 @@
 import { browser } from '$app/environment';
 import * as jose from 'jose';
 import { Agent, AtpAgent } from '@atproto/api';
+import { PUBLIC_BSKY_SERVER, PUBLIC_ENVIRONMENT, PUBLIC_BASE_DOMAIN } from '$env/static/public';
 
 // Types for our auth state
 interface AuthSession {
@@ -140,7 +141,8 @@ export async function createDpopJwt(
 }
 
 // Initialize the OAuth flow by redirecting to the authorization server
-export async function startOAuthFlow(serverUrl: string = 'https://bsky.social'): Promise<void> {
+export async function startOAuthFlow(): Promise<void> {
+    const serverUrl = PUBLIC_BSKY_SERVER || 'https://bsky.social';
     if (!browser) return;
 
     try {
@@ -159,7 +161,10 @@ export async function startOAuthFlow(serverUrl: string = 'https://bsky.social'):
         localStorage.setItem('bsky:serverUrl', serverUrl);
 
         // 5. Construct the authorization URL
-        const clientId = 'https://bsky-oauth-svelte.netlify.app/client-metadata.json';
+        const clientId = `${PUBLIC_BASE_DOMAIN}/${PUBLIC_ENVIRONMENT === 'dev' ?
+            "client-metadata-dev" :
+            "client-metadata"
+            }.json`;
         const redirectUri = `${window.location.origin}/callback`;
 
         const authUrl = new URL(`${serverUrl}/oauth/authorize`);
@@ -209,18 +214,21 @@ export async function handleOAuthCallback(queryParams: URLSearchParams): Promise
         }
 
         // 4. Get the server URL
-        const serverUrl = localStorage.getItem('bsky:serverUrl') || 'https://bsky.social';
+        const serverUrl = PUBLIC_BSKY_SERVER || 'https://bsky.social';
 
         // 5. Generate a new DPoP keypair
         const dpopKeypair = await generateDpopKeypair();
 
         // 6. First, make a valid request to get a DPoP nonce, using actual parameters
         let dpopNonce = '';
+
+        const clientId = `${PUBLIC_BASE_DOMAIN}/${PUBLIC_ENVIRONMENT === 'dev' ?
+            "client-metadata-dev" :
+            "client-metadata"
+            }.json`;
+
         try {
             console.log('Making initial request to get DPoP nonce...');
-
-            // Create a proper token request (with our client_id) to get a nonce
-            const clientId = 'https://bsky-oauth-svelte.netlify.app/client-metadata.json';
 
             // First create a DPoP JWT without a nonce
             const initialDpopJwt = await createDpopJwt(
@@ -283,7 +291,7 @@ export async function handleOAuthCallback(queryParams: URLSearchParams): Promise
             grant_type: 'authorization_code',
             code,
             redirect_uri: `${window.location.origin}/callback`,
-            client_id: 'https://bsky-oauth-svelte.netlify.app/client-metadata.json',
+            client_id: clientId,
             code_verifier: codeVerifier
         });
 
@@ -407,7 +415,7 @@ export async function getRandomFollowedAccounts(count = 3): Promise<any[]> {
     }
 
     try {
-        const serverUrl = localStorage.getItem('bsky:serverUrl') || 'https://bsky.social';
+        const serverUrl = PUBLIC_BSKY_SERVER || 'https://bsky.social';
 
         // Create an Agent instance with the OAuth session
         const agent = new Agent({
